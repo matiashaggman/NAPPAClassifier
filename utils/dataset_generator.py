@@ -24,7 +24,7 @@ def read_and_process_hypnogram(hypno_path):
                 start_date = line.split(':')[1].strip().split()[0]
                 break
 
-    # Skip the header (and the first artefact) and read the data
+    # Skip the header and read the data
     hypnogram_df = pd.read_table(hypno_path, sep=' ', skiprows=8, names=['datetime', 'sleep stage'])
     # Reformat the time stamp structure (remove redundant decimals)
     hypnogram_df['datetime'] = hypnogram_df['datetime'].str.replace(',000;', '')
@@ -107,12 +107,12 @@ def resample_features(acc_df, gyro_df):
         start_time = gyro_time 
         end_time = gyro_time + pd.Timedelta(seconds=30)
         window_data = acc_df.loc[start_time:end_time]
-        if not window_data.empty:
-            resampled_acc_df.loc[gyro_time] = window_data[['feature2(m/sec)']].mean()
+        resampled_acc_df.loc[gyro_time] = window_data.mean()
     
     # Construct the feature DataFrame
     feature_df = pd.concat([resampled_acc_df, resampled_gyro_df], axis=1)
     return feature_df
+
 
 def read_and_process_features(acc_path, gyro_path):
     """
@@ -133,14 +133,18 @@ def read_and_process_features(acc_path, gyro_path):
     accTime = pd.to_datetime(accData['UTCTimestamp(ms)'], unit='ms', utc=True).dt.tz_convert('Europe/Helsinki').dt.tz_localize(None)
     gyroTime = pd.to_datetime(gyroData['UTCTimestamp(ms)'], unit='ms', utc=True).dt.tz_convert('Europe/Helsinki').dt.tz_localize(None)
 
-    # Set time based indexing and select features for classifier:
-    # feature2(m/sec): Activity, feature3_Y(unitless): respiration max ACF, feature4_Y(Hz): respiration rate
-    # feature5_Y(grad/sec): respiration peaks median, feature6_Y(grad/sec): respiration peaks standard deviation
-    accData = accData.set_index(accTime)[['feature2(m/sec)']]
-    gyroData = gyroData.set_index(gyroTime)[['feature3_Y(unitless)', 'feature4_Y(Hz)', 'feature5_Y(grad/sec)', 'feature6_Y(grad/sec)']]
+    # Set time based indexing
+    accData = accData.set_index(accTime)
+    gyroData = gyroData.set_index(gyroTime)
 
     # Resample features to constant 30s to match hypnogram
     feature_df = resample_features(accData, gyroData)
+
+    # Select features for classifier:
+    # feature2(m/sec): Activity, feature3_Y(unitless): respiration max ACF, feature4_Y(Hz): respiration rate
+    # feature5_Y(grad/sec): respiration peaks median, feature6_Y(grad/sec): respiration peaks std.
+    feature_df = feature_df[['feature2(m/sec)','feature3_Y(unitless)','feature4_Y(Hz)',
+                           'feature5_Y(grad/sec)', 'feature6_Y(grad/sec)']]
 
     return feature_df
 

@@ -149,24 +149,27 @@ def box_plot(accuracies, MCCs, title):
 def plot_learning_curves(all_train_metrics, all_test_metrics, num_epochs, fold, final_plot):
 
     epochs = range(1, num_epochs + 1)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+    
     train_color, test_color = 'cornflowerblue', 'lightcoral'
-    if final_plot:        
-        train_loss_median = np.median(all_train_metrics[0,:,:], axis=0)       
-        train_mcc_median = np.median(all_train_metrics[2,:,:], axis=0)
-        
-        test_loss_median = np.median(all_test_metrics[0,:,:], axis=0)
-        test_mcc_median = np.median(all_test_metrics[2,:,:], axis=0)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+    if final_plot:
+        train_loss_mean = np.mean(all_train_metrics[0,:,:], axis=0)       
+        train_mcc_mean = np.mean(all_train_metrics[2,:,:], axis=0)
 
-        ax1.plot(epochs, train_loss_median,
-                  label='Median Train Loss', color=train_color)      
-        ax1.plot(epochs, test_loss_median,
-                  label='Median Test Loss', color=test_color)
+        test_loss_mean = np.mean(all_test_metrics[0,:,:], axis=0)
+        test_mcc_mean = np.mean(all_test_metrics[2,:,:], axis=0)
+
+
+        ax1.plot(epochs, train_loss_mean,
+                  label='Mean Train Loss', color=train_color)      
+        ax1.plot(epochs, test_loss_mean,
+                  label='Mean Test Loss', color=test_color)
      
-        ax2.plot(epochs, train_mcc_median,
-                  label='Median Train MCC', color=train_color)            
-        ax2.plot(epochs, test_mcc_median,
-                  label='Median Test MCC', color=test_color)
+        ax2.plot(epochs, train_mcc_mean,
+                  label='Mean Train MCC', color=train_color)            
+        ax2.plot(epochs, test_mcc_mean,
+                  label='Mean Test MCC', color=test_color)
+        
     else:
         ax1.plot(epochs, all_train_metrics[0, fold, :],
                 label='Train loss', color=train_color)
