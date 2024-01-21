@@ -16,53 +16,51 @@ def read_and_process_hypnogram(hypno_path):
         pd.DataFrame: A DataFrame with processed datetime and sleep stage information.
     """
         
-    # Read the Start Time to extract the start date
-    with open(hypno_path, 'r') as file:
-        lines = file.readlines()
-        for line in lines:
-            if "Start Time:" in line:
-                start_date = line.split(':')[1].strip().split()[0]
-                break
-
     # Skip the header and read the data
-    hypnogram_df = pd.read_table(hypno_path, sep=' ', skiprows=8, names=['datetime', 'sleep stage'])
-    # Reformat the time stamp structure (remove redundant decimals)
-    hypnogram_df['datetime'] = hypnogram_df['datetime'].str.replace(',000;', '')
+    hypnogram_df = pd.read_table(hypno_path, sep=' ', header=None)
+    
+    start_date = pd.to_datetime(hypnogram_df.iloc[1].str.split('Start Time: ')).date()
+    
+    # If each timestamp contains also date
+    if hypnogram_df.shape[1] == 3:
+        hypnogram_df.columns = ['date', 'time', 'sleep stage']
+        hypnogram_df['date'] = pd.to_datetime(hypnogram_df['date'], format='%d.%m.%Y')
+        hypnogram_df['time'] = pd.to_datetime(hypnogram_df['time'], format='%H:%M:%S,%f;')
 
-    # In some hypnograms, date is not included in the timestamp.
-    # If 'time' column has only clock values without date, prepend the start_date to each timestamp.
-    if " " not in hypnogram_df.iloc[0]['datetime']:
-        hypnogram_df['datetime'] = start_date + ' ' + hypnogram_df['datetime']
-        # Convert 'datetime' column to pandas datetime
-        hypnogram_df['datetime'] = pd.to_datetime(hypnogram_df['datetime'], format='%d.%m.%Y %H:%M:%S')
+        hypnogram_df['datetime'] = hypnogram_df['date'] + (hypnogram_df['time'] - hypnogram_df['time'].dt.normalize())
+        hypnogram_df = hypnogram_df[['datetime', 'sleep stage']]
+
+    # Else prepend date to each timestamp
+    elif hypnogram_df.shape[1] == 2:
+
+        hypnogram_df.columns = ['time', 'sleep stage']
+        hypnogram_df['time'] = pd.to_datetime(hypnogram_df['time'], format='%H:%M:%S,%f;').dt.time
         
-        # Detect potential midnight rollovers by looking for large negative jumps in time differences
+        hypnogram_df['date'] = start_date
+        hypnogram_df['datetime'] = pd.to_datetime(hypnogram_df['date'].astype(str) + ' ' + hypnogram_df['time'].astype(str))
+        
+        # Look for timestamps after midnight
         rollovers = (hypnogram_df['datetime'].diff() < pd.Timedelta(0)).cumsum()
+        
         # Change the date after midnight
         hypnogram_df['datetime'] += pd.to_timedelta(rollovers, unit='D')
-        
-    else:
-        # If timestamps also contain date, we're all set (this is in most cases).
-        hypnogram_df['datetime'] = pd.to_datetime(hypnogram_df['datetime'], format='%d.%m.%Y %H:%M:%S')
-    
-    hypnogram_df['sleep stage'] = hypnogram_df['sleep stage'].str.strip()  # Strip any extra spaces
 
-    # interpolate inter-epoch artefacts (n=3 in our dataset)
+        hypnogram_df = hypnogram_df[['datetime', 'sleep stage']]
+
     hypnogram_df['sleep stage'] = hypnogram_df['sleep stage'].replace('A', method='ffill')
-
     return hypnogram_df
 
 
 def align_features_with_labels(sensor_df, hypnogram_df):
     """
-    Aligns sensor features with hypnogram labels based on timestamps.
+    Aligns features with labels based on timestamps.
     
     Args:
         sensor_df (pd.DataFrame): DataFrame with sensor features.
-        hypnogram_df (pd.DataFrame): DataFrame with hypnogram information.
+        hypnogram_df (pd.DataFrame): DataFrame with a processed hypnogram
     
     Returns:
-        Tuple: Aligned features and hypnogram DataFrames.
+        Tuple: Temporally aligned features and hypnogram DataFrames.
     """
     hypno_time = hypnogram_df['datetime']
 
@@ -70,14 +68,12 @@ def align_features_with_labels(sensor_df, hypnogram_df):
     start_idx_sensor = sensor_df.index.searchsorted(hypno_time[0])
     start_idx_hypnogram = hypno_time.searchsorted(sensor_df.index[0])
 
-    # Set commong start index
     aligned_sensor_df = sensor_df[start_idx_sensor:]
+
     aligned_hypnogram_df= hypnogram_df[start_idx_hypnogram:]
-    
-    # Find common end index
+
     min_length = min(len(aligned_sensor_df), len(aligned_hypnogram_df))
 
-    # Set common end index
     aligned_sensor_df = aligned_sensor_df[:min_length]
     aligned_hypnogram_df = aligned_hypnogram_df[:min_length]
 
@@ -86,14 +82,14 @@ def align_features_with_labels(sensor_df, hypnogram_df):
 
 def resample_features(acc_df, gyro_df):
     """
-    Resamples sensor features to match the hypnogram's 30-second epochs.
+    Resamples features to match the hypnogram's 30-second epochs.
     
     Args:
-        acc_df (pd.DataFrame): DataFrame with accelerometer data.
-        gyro_df (pd.DataFrame): DataFrame with gyroscope data.
+        acc_df (pd.DataFrame): DataFrame with accelerometer derived features.
+        gyro_df (pd.DataFrame): DataFrame with gyroscope derived features.
     
     Returns:
-        pd.DataFrame: A DataFrame with resampled features.
+        pd.DataFrame: A DataFrame with combined and resampled features.
     """
 
     # Resample gyroscope features to exactly 30s intervals to match hypnogram labels
@@ -109,7 +105,7 @@ def resample_features(acc_df, gyro_df):
         window_data = acc_df.loc[start_time:end_time]
         resampled_acc_df.loc[gyro_time] = window_data.mean()
     
-    # Construct the feature DataFrame
+
     feature_df = pd.concat([resampled_acc_df, resampled_gyro_df], axis=1)
     return feature_df
 
@@ -119,8 +115,8 @@ def read_and_process_features(acc_path, gyro_path):
     Reads sensor features from CSV files and processes them for classification.
     
     Args:
-        acc_path (str): Path to the accelerometer CSV file.
-        gyro_path (str): Path to the gyroscope CSV file.
+        acc_path (str): Path to the accelerometer feature CSV file.
+        gyro_path (str): Path to the gyroscope feature CSV file.
     
     Returns:
         pd.DataFrame: A DataFrame with sensor features ready for classification.
@@ -136,7 +132,7 @@ def read_and_process_features(acc_path, gyro_path):
     # Set time based indexing
     accData = accData.set_index(accTime)
     gyroData = gyroData.set_index(gyroTime)
-
+    
     # Resample features to constant 30s to match hypnogram
     feature_df = resample_features(accData, gyroData)
 
