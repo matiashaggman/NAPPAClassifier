@@ -16,10 +16,15 @@ def read_and_process_hypnogram(hypno_path):
         pd.DataFrame: A DataFrame with processed datetime and sleep stage information.
     """
         
-    # Skip the header and read the data
-    hypnogram_df = pd.read_table(hypno_path, sep=' ', header=None)
-    
-    start_date = pd.to_datetime(hypnogram_df.iloc[1].str.split('Start Time: ')).date()
+    with open(hypno_path, 'r') as file:
+        lines = file.readlines()
+
+    # Extract start date
+    start_date_str = lines[1].split('Start Time: ')[1].strip()
+    start_date = pd.to_datetime(start_date_str, format='%d.%m.%Y %H:%M:%S').date()
+
+    # Skip header
+    hypnogram_df = pd.read_table(hypno_path, skiprows=8, delimiter= ' ', header=None)
     
     # If each timestamp contains also date
     if hypnogram_df.shape[1] == 3:
@@ -28,8 +33,6 @@ def read_and_process_hypnogram(hypno_path):
         hypnogram_df['time'] = pd.to_datetime(hypnogram_df['time'], format='%H:%M:%S,%f;')
 
         hypnogram_df['datetime'] = hypnogram_df['date'] + (hypnogram_df['time'] - hypnogram_df['time'].dt.normalize())
-        hypnogram_df = hypnogram_df[['datetime', 'sleep stage']]
-
     # Else prepend date to each timestamp
     elif hypnogram_df.shape[1] == 2:
 
@@ -45,8 +48,7 @@ def read_and_process_hypnogram(hypno_path):
         # Change the date after midnight
         hypnogram_df['datetime'] += pd.to_timedelta(rollovers, unit='D')
 
-        hypnogram_df = hypnogram_df[['datetime', 'sleep stage']]
-
+    hypnogram_df = hypnogram_df[['datetime', 'sleep stage']]
     hypnogram_df['sleep stage'] = hypnogram_df['sleep stage'].replace('A', method='ffill')
     return hypnogram_df
 
@@ -79,7 +81,6 @@ def align_features_with_labels(sensor_df, hypnogram_df):
 
     return aligned_sensor_df, aligned_hypnogram_df
 
-
 def resample_features(acc_df, gyro_df):
     """
     Resamples features to match the hypnogram's 30-second epochs.
@@ -108,7 +109,6 @@ def resample_features(acc_df, gyro_df):
 
     feature_df = pd.concat([resampled_acc_df, resampled_gyro_df], axis=1)
     return feature_df
-
 
 def read_and_process_features(acc_path, gyro_path):
     """
