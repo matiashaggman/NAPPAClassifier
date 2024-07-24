@@ -1,4 +1,4 @@
-# NAPPA (NApping PAnts) Infant Sleep Stage Classifier
+# NAPPA (NAPping PAnts) Infant Sleep Stage Classifier
 ## Overview
 NAPPA is a machine learning project focused on classifying sleep stages in infants with out-of-hospital use as it's primary objective. The project utilizes a BiGRU (Bidirectional Gated Recurrent Unit) based deep learning model and movement sensor derived features.
 
@@ -8,5 +8,4 @@ NAPPA is a machine learning project focused on classifying sleep stages in infan
 - TorchMetrics
 - NumPy
 - Pandas
-- Sklearn
 - Matplotlib & Seaborn
